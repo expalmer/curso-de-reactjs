@@ -10,62 +10,70 @@ const FILTERS = {
   UNDONE: "UNDONE"
 };
 
-const base = "http://localhost:4000/v1/tasks";
+const BASE = "http://localhost:4000/v1/tasks";
 const ajax = {
-  getAllTasks: () => Axios.get(base),
-  storeTask: body => Axios.post(base, body),
-  updateTask: (id, body) => Axios.put(`${base}/${id}`, body),
-  destroyTask: id => Axios.delete(`${base}/${id}`)
+  getAllTasks: () => Axios.get(BASE),
+  storeTask: body => Axios.post(BASE, body),
+  updateTask: (id, body) => Axios.put(`${BASE}/${id}`, body),
+  destroyTask: id => Axios.delete(`${BASE}/${id}`)
 };
 
 function App() {
-  const [items, setItems] = useState([]);
-
-  const [task, setTask] = useState("");
-
-  const [filter, setFilter] = useState(FILTERS.ALL);
-
-  const [toggle, setToggle] = useState(false);
+  const [state, setState] = useState({
+    task: "",
+    items: [],
+    filter: FILTERS.ALL,
+    toggle: false
+  });
 
   useEffect(() => {
     ajax
       .getAllTasks()
       .then(({ data }) => {
-        setItems(data);
+        setState(state => ({ ...state, items: data }));
       })
       .catch(err => {
         console.log("err", err);
       });
   }, []);
 
+  const { task, items, filter, toggle } = state;
+
   const handleChange = e => {
     const { value } = e.target;
-    setTask(value);
+    setState(state => ({ ...state, task: value }));
   };
 
   const handleEnter = e => {
-    if (e.keyCode === 13 && task) {
-      const body = { task, done: 0 };
-      ajax
-        .storeTask(body)
-        .then(({ data }) => {
-          setItems(items => [data, ...items]);
-          setTask("");
-        })
-        .catch(err => {
-          console.err("err", err);
-        });
+    if (e.keyCode !== 13 || !task) {
+      return;
     }
+    const body = { task, done: 0 };
+    ajax
+      .storeTask(body)
+      .then(({ data }) => {
+        setState(state => ({
+          ...state,
+          task: "",
+          items: [data, ...state.items]
+        }));
+      })
+      .catch(err => {
+        console.err("err", err);
+      });
   };
 
   const handleToggle = () => {
-    const toggleValue = !toggle;
+    const toggleValue = !state.toggle;
     const done = toggleValue ? 1 : 0;
     const promises = items.map(i => ajax.updateTask({ ...i, done }));
     Promise.all(promises)
       .then(() => {
-        setItems(items => items.map(i => ({ ...i, done })));
-        setToggle(toggleValue);
+        setState(state => ({
+          ...state,
+          toggle: toggleValue,
+          items: items.map(i => ({ ...i, done }))
+        }));
       })
       .catch(err => {
         console.log("err", err);
@@ -78,14 +86,15 @@ function App() {
     ajax
       .updateTask(id, { ...item, done })
       .then(() => {
-        setItems(items =>
-          items.map(i => {
+        setState(state => ({
+          ...state,
+          items: items.map(i => {
             if (i.id === id) {
               return { ...i, done };
             }
             return i;
           })
-        );
+        }));
       })
       .catch(err => {
         console.log("err", err);
@@ -93,10 +102,14 @@ function App() {
   };
 
   const handleDestroy = id => {
+    console.log("destroy", id);
     ajax
       .destroyTask(id)
       .then(() => {
-        setItems(items => items.filter(i => +i.id !== +id));
+        setState(state => ({
+          ...state,
+          items: items.filter(i => +i.id !== +id)
+        }));
       })
       .catch(err => {
         console.log("err", err);
@@ -104,13 +117,20 @@ function App() {
   };
 
   const handleClean = () => {
-    const promises = items.filter(i => i.done).map(i => handleDestroy(i.id));
+    const promises = items.filter(i => i.done).map(i => ajax.destroyTask(i.id));
     Promise.all(promises)
-      .then(() => {})
+      .then(() => {
+        setState(state => ({
+          ...state,
+          items: state.items.filter(i => !i.done)
+        }));
+      })
       .catch(err => {
         console.log("err", err);
       });
   };
+
+  const handleFilter = v => setState(state => ({ ...state, filter: v }));
 
   const totalLeft = items.filter(i => !i.done).length;
 
@@ -159,7 +179,7 @@ function App() {
               className={classnames("button", {
                 "button--selected": filter === FILTERS.ALL
               })}
-              onClick={() => setFilter(FILTERS.ALL)}
+              onClick={() => handleFilter(FILTERS.ALL)}
             >
               All
             </span>
@@ -169,7 +189,7 @@ function App() {
               className={classnames("button", {
                 "button--selected": filter === FILTERS.UNDONE
               })}
-              onClick={() => setFilter(FILTERS.UNDONE)}
+              onClick={() => handleFilter(FILTERS.UNDONE)}
             >
               Active
             </span>
@@ -179,7 +199,7 @@ function App() {
               className={classnames("button", {
                 "button--selected": filter === FILTERS.DONE
               })}
-              onClick={() => setFilter(FILTERS.DONE)}
+              onClick={() => handleFilter(FILTERS.DONE)}
             >
               Completed
             </span>
