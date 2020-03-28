@@ -59,10 +59,17 @@ function App() {
   };
 
   const handleToggle = () => {
-    const t = !toggle;
-    const done = t ? 1 : 0;
-    setItems(items => items.map(i => ({ ...i, done })));
-    setToggle(t);
+    const toggleValue = !toggle;
+    const done = toggleValue ? 1 : 0;
+    const promises = items.map(i => ajax.updateTask({ ...i, done }));
+    Promise.all(promises)
+      .then(() => {
+        setItems(items => items.map(i => ({ ...i, done })));
+        setToggle(toggleValue);
+      })
+      .catch(err => {
+        console.log("err", err);
+      });
   };
 
   const handleDone = id => {
